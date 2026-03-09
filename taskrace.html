@@ -679,12 +679,48 @@
 
 <script>
 // ============================================================
-// STORAGE
+// SUPABASE CONFIG
 // ============================================================
-const DB_USERS = 'taskrace_users';
-const DB_TASKS = 'taskrace_tasks';
+const SUPA_URL = 'https://hccylntvfeloodbnigsq.supabase.co';
+const SUPA_KEY = 'sb_publishable_Q4LlI6AN0ptTsf74IAGVmA_LHwOaRFG';
 
-// We'll use an in-memory store backed by window.storage (persistent artifact storage)
+const headers = {
+  'apikey': SUPA_KEY,
+  'Authorization': 'Bearer ' + SUPA_KEY,
+  'Content-Type': 'application/json',
+  'Prefer': 'return=representation'
+};
+
+async function sbGet(table) {
+  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?select=*&order=created_at.asc`, { headers });
+  if (!r.ok) { console.error('sbGet error', table, await r.text()); return []; }
+  return r.json();
+}
+async function sbInsert(table, row) {
+  const r = await fetch(`${SUPA_URL}/rest/v1/${table}`, { method:'POST', headers, body: JSON.stringify(row) });
+  if (!r.ok) { console.error('sbInsert error', table, await r.text()); return null; }
+  const d = await r.json(); return Array.isArray(d) ? d[0] : d;
+}
+async function sbUpdate(table, id, row) {
+  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`, { method:'PATCH', headers, body: JSON.stringify(row) });
+  if (!r.ok) { console.error('sbUpdate error', table, await r.text()); return null; }
+  const d = await r.json(); return Array.isArray(d) ? d[0] : d;
+}
+async function sbDelete(table, id) {
+  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`, { method:'DELETE', headers });
+  if (!r.ok) console.error('sbDelete error', table, await r.text());
+}
+
+function normUser(r) {
+  return { id: r.id, name: r.name, img: r.img, imgData: r.img_data,
+           role: r.role, taskIds: r.task_ids||[], subtaskIds: r.subtask_ids||[] };
+}
+function normTask(r) { return { id: r.id, name: r.name, icon: r.icon, subtasks: r.subtasks||[] }; }
+function normDrop(r) { return { id: r.id, name: r.name, dates: r.dates||[], taskIds: r.task_ids||[] }; }
+
+// ============================================================
+// STATE
+// ============================================================
 let users = [];
 let tasks = [];
 let drops = [];
@@ -697,81 +733,40 @@ const COLORS = ['#7c6af7','#f76a9a','#6af7c8','#f7c86a','#f76a6a','#6ac5f7','#c8
 // ============================================================
 // INIT
 // ============================================================
+function showLoader(on) {
+  let el = document.getElementById('app-loader');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'app-loader';
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(10,10,15,0.9);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:14px';
+    el.innerHTML = '<div style="font-size:40px;animation:spin 1s linear infinite">⚙️</div><div style="font-family:Syne,sans-serif;font-size:16px;color:#e8e8f0">Conectando con Supabase...</div>';
+    const style = document.createElement('style');
+    style.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(style);
+    document.body.appendChild(el);
+  }
+  el.style.display = on ? 'flex' : 'none';
+}
+
 async function init() {
-  await loadData();
+  showLoader(true);
+  try {
+    const [rawUsers, rawTasks, rawDrops] = await Promise.all([
+      sbGet('users'), sbGet('tasks'), sbGet('drops')
+    ]);
+    users = rawUsers.map(normUser);
+    tasks = rawTasks.map(normTask);
+    drops = rawDrops.map(normDrop);
+  } catch(e) {
+    console.error('init error', e);
+    toast('❌ Error al conectar con Supabase');
+  }
+  showLoader(false);
   renderAll();
   updateRaceDate();
-  // Demo data if empty
-  if (tasks.length === 0 && users.length === 0) {
-    seedDemo();
-  }
 }
 
-async function loadData() {
-  try {
-    const u = await window.storage.get('users');
-    if (u) users = JSON.parse(u.value);
-  } catch(e) { users = []; }
-  try {
-    const t = await window.storage.get('tasks');
-    if (t) tasks = JSON.parse(t.value);
-  } catch(e) { tasks = []; }
-  try {
-    const d = await window.storage.get('drops');
-    if (d) drops = JSON.parse(d.value);
-  } catch(e) { drops = []; }
-}
-
-async function saveData() {
-  await window.storage.set('users', JSON.stringify(users));
-  await window.storage.set('tasks', JSON.stringify(tasks));
-  await window.storage.set('drops', JSON.stringify(drops));
-}
-
-function seedDemo() {
-  tasks = [
-    { id: uid(), name: 'Frontend', icon: '🎨', subtasks: [
-      { id: uid(), name: 'Diseño UI', date: daysFromNow(-20), color: '#7c6af7' },
-      { id: uid(), name: 'Componentes', date: daysFromNow(-10), color: '#6af7c8' },
-      { id: uid(), name: 'Responsive', date: daysFromNow(5), color: '#f7c86a' },
-    ]},
-    { id: uid(), name: 'Backend API', icon: '⚙️', subtasks: [
-      { id: uid(), name: 'Modelos DB', date: daysFromNow(-15), color: '#f76a9a' },
-      { id: uid(), name: 'Endpoints', date: daysFromNow(-5), color: '#f76a6a' },
-      { id: uid(), name: 'Tests', date: daysFromNow(10), color: '#6ac5f7' },
-    ]},
-    { id: uid(), name: 'QA Testing', icon: '🔍', subtasks: [
-      { id: uid(), name: 'Plan de pruebas', date: daysFromNow(-8), color: '#c86af7' },
-      { id: uid(), name: 'Ejecución', date: daysFromNow(2), color: '#f7a06a' },
-      { id: uid(), name: 'Reporte', date: daysFromNow(15), color: '#a0f76a' },
-    ]},
-  ];
-  users = [
-    { id: uid(), name: 'Ana López', img: '👩‍💻', role: 'dev', taskIds: [tasks[0].id, tasks[1].id],
-      subtaskIds: [tasks[0].subtasks[0].id, tasks[0].subtasks[1].id, tasks[0].subtasks[2].id, tasks[1].subtasks[0].id, tasks[1].subtasks[1].id] },
-    { id: uid(), name: 'Carlos Ruiz', img: '🧑‍🔬', role: 'qa', taskIds: [tasks[2].id],
-      subtaskIds: [tasks[2].subtasks[0].id, tasks[2].subtasks[1].id, tasks[2].subtasks[2].id] },
-    { id: uid(), name: 'Sofía Mora', img: '👩‍🎨', role: 'dev', taskIds: [tasks[0].id],
-      subtaskIds: [tasks[0].subtasks[1].id, tasks[0].subtasks[2].id] },
-    { id: uid(), name: 'Javier Paz', img: '🧑‍💻', role: 'qa', taskIds: [tasks[1].id, tasks[2].id],
-      subtaskIds: [tasks[1].subtasks[0].id, tasks[1].subtasks[2].id, tasks[2].subtasks[0].id] },
-  ];
-  drops = [
-    { id: uid(), name: 'Sprint 1', dates: [daysFromNow(-18), daysFromNow(-10)], taskIds: [tasks[0].id, tasks[1].id] },
-    { id: uid(), name: 'Sprint 2', dates: [daysFromNow(3), daysFromNow(12)], taskIds: [tasks[0].id, tasks[2].id] },
-    { id: uid(), name: 'Release', dates: [daysFromNow(20)], taskIds: [tasks[1].id, tasks[2].id] },
-  ];
-  saveData();
-  renderAll();
-}
-
-function daysFromNow(d) {
-  const dt = new Date();
-  dt.setDate(dt.getDate() + d);
-  return dt.toISOString().split('T')[0];
-}
-
-function uid() { return Math.random().toString(36).slice(2,10); }
+function uid() { return crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2,18); }
 
 // ============================================================
 // VIEW SWITCH
@@ -924,32 +919,33 @@ function previewImgFile() {
   reader.readAsDataURL(file);
 }
 
-function saveUser() {
+async function saveUser() {
   const name = document.getElementById('user-name').value.trim();
   if (!name) { toast('⚠️ Ingresa un nombre'); return; }
   const role = document.getElementById('user-role').value;
   const imgUrl = document.getElementById('user-img-url').value.trim();
   const taskIds = [...document.querySelectorAll('.task-main-check:checked')].map(x => x.value);
   const subtaskIds = [...document.querySelectorAll('.sub-check:checked')].map(x => x.value);
-
   const roleEmoji = role === 'dev' ? '🧑‍💻' : '🔍';
   const imgData = pendingImgData || null;
   const img = imgUrl || roleEmoji;
-
+  const row = { name, img, img_data: imgData, role, task_ids: taskIds, subtask_ids: subtaskIds };
   if (editingUserId) {
-    const u = users.find(x => x.id === editingUserId);
-    Object.assign(u, { name, img, imgData, role, taskIds, subtaskIds });
+    const saved = await sbUpdate('users', editingUserId, row);
+    if (saved) { const u = users.find(x => x.id === editingUserId); Object.assign(u, normUser({...row, id: editingUserId})); }
   } else {
-    users.push({ id: uid(), name, img, imgData, role, taskIds, subtaskIds });
+    const saved = await sbInsert('users', row);
+    if (saved) users.push(normUser(saved));
   }
   pendingImgData = null;
-  saveData(); renderAll(); closeModal('user');
+  renderAll(); closeModal('user');
   toast('✅ Usuario guardado');
 }
 
-function deleteUser(id) {
+async function deleteUser(id) {
+  await sbDelete('users', id);
   users = users.filter(u => u.id !== id);
-  saveData(); renderAll();
+  renderAll();
   toast('🗑 Usuario eliminado');
 }
 
@@ -1026,7 +1022,7 @@ function selectColor(dot, stId) {
   if (input) input.value = dot.dataset.color;
 }
 
-function saveTask() {
+async function saveTask() {
   const name = document.getElementById('task-name').value.trim();
   if (!name) { toast('⚠️ Ingresa un nombre'); return; }
   const icon = document.getElementById('task-icon').value.trim() || '📋';
@@ -1038,14 +1034,15 @@ function saveTask() {
     const c = div.querySelector('.st-color')?.value || COLORS[0];
     if (n && d) subtasks.push({ id: uid(), name: n, date: d, color: c });
   });
-
+  const row = { name, icon, subtasks };
   if (editingTaskId) {
-    const t = tasks.find(x => x.id === editingTaskId);
-    Object.assign(t, { name, icon, subtasks });
+    const saved = await sbUpdate('tasks', editingTaskId, row);
+    if (saved) { const t = tasks.find(x => x.id === editingTaskId); Object.assign(t, normTask({...row, id: editingTaskId})); }
   } else {
-    tasks.push({ id: uid(), name, icon, subtasks });
+    const saved = await sbInsert('tasks', row);
+    if (saved) tasks.push(normTask(saved));
   }
-  saveData(); renderAll(); closeModal('task');
+  renderAll(); closeModal('task');
   toast('✅ Tarea guardada');
 }
 
@@ -1062,10 +1059,11 @@ function editTask(id) {
   document.getElementById('modal-task').classList.add('open');
 }
 
-function deleteTask(id) {
+async function deleteTask(id) {
+  await sbDelete('tasks', id);
   tasks = tasks.filter(t => t.id !== id);
   users.forEach(u => { u.taskIds = (u.taskIds||[]).filter(tid => tid !== id); });
-  saveData(); renderAll();
+  renderAll();
   toast('🗑 Tarea eliminada');
 }
 
@@ -1166,26 +1164,31 @@ function editDrop(id) {
   document.getElementById('modal-drop').classList.add('open');
 }
 
-function saveDrop() {
+async function saveDrop() {
   const name = document.getElementById('drop-name').value.trim();
   if (!name) { toast('⚠️ Ingresa un nombre para el Drop'); return; }
   const dates = [...document.querySelectorAll('.drop-date-input')]
     .map(i => i.value).filter(Boolean).sort();
   if (!dates.length) { toast('⚠️ Agrega al menos una fecha'); return; }
   const taskIds = [...document.querySelectorAll('.drop-task-check:checked')].map(x => x.value);
+
+  const row = { name, dates, task_ids: taskIds };
+
   if (editingDropId) {
-    const d = drops.find(x => x.id === editingDropId);
-    Object.assign(d, { name, dates, taskIds });
+    const saved = await sbUpdate('drops', editingDropId, row);
+    if (saved) { const d = drops.find(x => x.id === editingDropId); Object.assign(d, normDrop({...row, id: editingDropId})); }
   } else {
-    drops.push({ id: uid(), name, dates, taskIds });
+    const saved = await sbInsert('drops', row);
+    if (saved) drops.push(normDrop(saved));
   }
-  saveData(); renderAll(); closeModal('drop');
+  renderAll(); closeModal('drop');
   toast('✅ Drop guardado');
 }
 
-function deleteDrop(id) {
+async function deleteDrop(id) {
+  await sbDelete('drops', id);
   drops = drops.filter(d => d.id !== id);
-  saveData(); renderAll();
+  renderAll();
   toast('🗑 Drop eliminado');
 }
 
