@@ -1,0 +1,1401 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaskRace — Seguimiento de Tareas</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a40;
+    --accent: #7c6af7;
+    --accent2: #f7c86a;
+    --accent3: #6af7c8;
+    --text: #e8e8f0;
+    --text2: #8888aa;
+    --dev: #7c6af7;
+    --qa: #f76a9a;
+    --danger: #f76a6a;
+    --track-h: 80px;
+    --radius: 12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* NOISE TEXTURE */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 0;
+  }
+
+  /* LAYOUT */
+  .app { position: relative; z-index: 1; }
+
+  /* HEADER */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10,10,15,0.8);
+    backdrop-filter: blur(20px);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+  .logo span { color: var(--accent); }
+  .logo em { color: var(--accent2); font-style: normal; }
+
+  nav { display: flex; gap: 4px; }
+  nav button {
+    background: none; border: 1px solid transparent;
+    color: var(--text2); padding: 8px 18px;
+    border-radius: 8px; cursor: pointer;
+    font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 600;
+    transition: all 0.2s;
+  }
+  nav button:hover { color: var(--text); background: var(--surface2); }
+  nav button.active { color: var(--accent); border-color: var(--accent); background: rgba(124,106,247,0.1); }
+
+  /* VIEWS */
+  .view { display: none; padding: 32px; }
+  .view.active { display: block; }
+
+  /* SECTION TITLE */
+  .section-title {
+    font-size: 28px; font-weight: 800; letter-spacing: -1px;
+    margin-bottom: 8px;
+  }
+  .section-sub { color: var(--text2); font-size: 14px; margin-bottom: 28px; font-family: 'DM Mono', monospace; }
+
+  /* CARDS GRID */
+  .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    transition: border-color 0.2s, transform 0.2s;
+    position: relative;
+  }
+  .card:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+  .card-avatar {
+    width: 52px; height: 52px; border-radius: 50%;
+    object-fit: cover; border: 2px solid var(--border);
+    background: var(--surface2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; overflow: hidden; margin-bottom: 12px;
+  }
+  .card-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+  .card-name { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+  .card-meta { font-size: 12px; font-family: 'DM Mono', monospace; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    font-family: 'DM Mono', monospace;
+  }
+  .badge-dev { background: rgba(124,106,247,0.15); color: var(--dev); }
+  .badge-qa { background: rgba(247,106,154,0.15); color: var(--qa); }
+
+  .card-tasks { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .task-chip {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 20px; padding: 2px 10px; font-size: 11px;
+    display: flex; align-items: center; gap: 4px;
+  }
+
+  .card-actions { display: flex; gap: 8px; margin-top: 14px; }
+  .btn-sm {
+    flex: 1; padding: 7px 0; border-radius: 8px; font-size: 12px; font-weight: 600;
+    cursor: pointer; border: 1px solid var(--border); font-family: 'Syne', sans-serif;
+    background: var(--surface2); color: var(--text2); transition: all 0.2s;
+  }
+  .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-sm.danger:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* ADD BUTTON */
+  .btn-add {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--accent); color: #fff; border: none;
+    padding: 11px 22px; border-radius: var(--radius);
+    font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700;
+    cursor: pointer; transition: all 0.2s; margin-bottom: 24px;
+  }
+  .btn-add:hover { background: #6a59e0; transform: translateY(-1px); }
+
+  /* MODAL */
+  .modal-backdrop {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
+    z-index: 1000; align-items: center; justify-content: center;
+  }
+  .modal-backdrop.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px; padding: 28px;
+    width: 100%; max-width: 480px;
+    max-height: 85vh; overflow-y: auto;
+    animation: slideUp 0.25s ease;
+  }
+  @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  .modal h3 { font-size: 20px; font-weight: 800; margin-bottom: 20px; }
+
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 6px; font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.5px; }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); padding: 10px 14px; border-radius: 8px;
+    font-family: 'Syne', sans-serif; font-size: 14px;
+    transition: border-color 0.2s; outline: none;
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); }
+
+  .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+  .btn-primary {
+    flex: 1; background: var(--accent); color: #fff; border: none;
+    padding: 12px; border-radius: 8px; font-family: 'Syne', sans-serif;
+    font-size: 14px; font-weight: 700; cursor: pointer; transition: background 0.2s;
+  }
+  .btn-primary:hover { background: #6a59e0; }
+  .btn-cancel {
+    flex: 1; background: none; border: 1px solid var(--border); color: var(--text2);
+    padding: 12px; border-radius: 8px; font-family: 'Syne', sans-serif;
+    font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+  }
+  .btn-cancel:hover { border-color: var(--text2); color: var(--text); }
+
+  /* CHECKBOX LIST */
+  .check-list { display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow-y: auto; }
+
+  .task-check-group { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .task-check-header {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface2); padding: 10px 14px; cursor: pointer;
+    transition: background 0.2s; user-select: none;
+  }
+  .task-check-header:hover { background: #22223a; }
+  .task-check-header input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; flex-shrink:0; }
+  .task-check-header-label { flex: 1; font-size: 13px; font-weight: 700; display:flex; align-items:center; gap:6px; }
+  .task-check-toggle { font-size: 10px; color: var(--text2); transition: transform 0.2s; }
+  .task-check-toggle.open { transform: rotate(180deg); }
+
+  .subtask-check-list {
+    display: none; flex-direction: column; gap: 0;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .subtask-check-list.open { display: flex; }
+
+  .subtask-check-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px 8px 36px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer; transition: background 0.15s;
+  }
+  .subtask-check-item:last-child { border-bottom: none; }
+  .subtask-check-item:hover { background: var(--surface2); }
+  .subtask-check-item input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; flex-shrink:0; }
+  .subtask-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink:0; }
+  .subtask-check-name { font-size: 12px; flex: 1; }
+  .subtask-check-date { font-size: 10px; font-family: 'DM Mono', monospace; color: var(--text2); }
+
+  /* COLOR PICKER */
+  .color-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+  .color-dot {
+    width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+    border: 2px solid transparent; transition: border-color 0.2s, transform 0.2s;
+  }
+  .color-dot:hover, .color-dot.selected { border-color: #fff; transform: scale(1.15); }
+
+  /* ============================
+     RACE VIEW
+  ============================ */
+  #view-race { padding: 0; }
+
+  .race-header {
+    padding: 28px 32px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .race-date {
+    font-family: 'DM Mono', monospace; font-size: 13px; color: var(--accent2);
+    background: rgba(247,200,106,0.1); border: 1px solid rgba(247,200,106,0.3);
+    padding: 6px 14px; border-radius: 20px;
+  }
+
+  .race-track-container {
+    padding: 32px;
+    overflow-x: auto;
+  }
+
+  .race-track {
+    position: relative;
+    min-width: 900px;
+  }
+
+  .race-row {
+    display: flex; align-items: center;
+    margin-bottom: 20px;
+    position: relative;
+  }
+
+  .race-user-label {
+    width: 150px; flex-shrink: 0;
+    display: flex; align-items: center; gap: 10px;
+    padding-right: 16px;
+  }
+  .race-user-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--surface2); border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; overflow: hidden; flex-shrink: 0;
+  }
+  .race-user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .race-user-info { min-width: 0; }
+  .race-user-name { font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .race-user-role { font-size: 10px; font-family: 'DM Mono', monospace; }
+
+  /* TRACK LINE */
+  .race-lane {
+    flex: 1;
+    height: var(--track-h);
+    position: relative;
+    display: flex; align-items: center;
+  }
+
+  .lane-line {
+    position: absolute; left: 0; right: 0;
+    height: 3px; top: 50%;
+    transform: translateY(-50%);
+    background: var(--border);
+    border-radius: 2px;
+  }
+  .lane-line-fill {
+    position: absolute; left: 0;
+    height: 3px; top: 50%;
+    transform: translateY(-50%);
+    border-radius: 2px;
+    transition: width 1s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  /* TASK ICON at start */
+  .lane-start-icon {
+    position: absolute; left: -5px; top: 50%;
+    transform: translateY(-50%);
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--surface); border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; z-index: 3;
+    box-shadow: 0 0 0 4px var(--bg);
+  }
+
+  /* FINISH FLAG */
+  .lane-end-flag {
+    position: absolute; right: 0; top: 50%;
+    transform: translateY(-50%);
+    font-size: 26px; z-index: 3;
+  }
+
+  /* USER AVATAR RUNNER */
+  .lane-runner {
+    position: absolute; top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    transition: left 1s cubic-bezier(0.4,0,0.2,1);
+  }
+
+  .runner-wrap {
+    position: relative;
+    display: flex; flex-direction: column; align-items: center;
+  }
+
+  .runner-avatar {
+    width: 42px; height: 42px; border-radius: 50%;
+    background: var(--surface2); border: 3px solid var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; overflow: hidden;
+    box-shadow: 0 0 16px rgba(124,106,247,0.5);
+  }
+  .runner-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+  /* SUBTASK DOTS above runner — grouped by task */
+  .runner-dots {
+    display: flex; gap: 5px; align-items: flex-end;
+    position: absolute; bottom: 100%; margin-bottom: 5px;
+    left: 50%; transform: translateX(-50%);
+    flex-wrap: nowrap; white-space: nowrap;
+  }
+  .runner-task-group {
+    display: flex; align-items: center; gap: 2px;
+    background: rgba(0,0,0,0.45); border-radius: 20px;
+    padding: 2px 5px 2px 3px;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .runner-task-icon { font-size: 14px; line-height: 1; flex-shrink: 0; margin-right: 2px; }
+  .runner-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.25);
+    flex-shrink: 0;
+  }
+  .runner-dot.completed { opacity: 1; }
+  .runner-dot.pending { opacity: 0.3; }
+
+  /* START FLAG */
+  .lane-start-flag {
+    position: absolute; left: -6px; top: 50%;
+    transform: translateY(-50%);
+    z-index: 3; font-size: 22px; line-height: 1;
+    filter: drop-shadow(0 0 6px rgba(255,255,255,0.3));
+  }
+
+  /* CLASSIFICATION PANEL */
+  .race-classification { border-top: 1px solid var(--border); padding: 28px 32px 36px; }
+  .class-title { font-size: 18px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; }
+  .class-table { display: flex; flex-direction: column; gap: 12px; }
+  .class-row {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 18px;
+    display: flex; align-items: center; gap: 16px;
+    transition: border-color 0.2s; flex-wrap: wrap;
+  }
+  .class-row:hover { border-color: var(--accent); }
+  .class-rank { font-size: 20px; font-weight: 800; font-family: 'DM Mono', monospace; color: var(--text2); width: 28px; text-align: center; flex-shrink: 0; }
+  .class-rank.gold { color: #f7c86a; }
+  .class-rank.silver { color: #b0b8d0; }
+  .class-rank.bronze { color: #d4845a; }
+  .class-user-avatar {
+    width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+    background: var(--surface2); border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; overflow: hidden;
+  }
+  .class-user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .class-user-info { min-width: 120px; }
+  .class-user-name { font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+  .class-user-role { font-size: 11px; font-family: 'DM Mono', monospace; }
+  .class-tasks { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; flex: 1; }
+  .class-task-group {
+    display: flex; align-items: center; gap: 5px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 20px; padding: 5px 12px 5px 8px;
+  }
+  .class-task-icon { font-size: 21px; }
+  .class-task-name { font-size: 11px; font-weight: 700; color: var(--text2); margin-right: 3px; white-space: nowrap; }
+  .class-sub-dot-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .class-sub-entry { display: flex; align-items: flex-start; gap: 5px; }
+  .class-sub-dot {
+    width: 13px; height: 13px; border-radius: 50%; margin-top: 2px;
+    border: 1.5px solid rgba(255,255,255,0.2); flex-shrink: 0;
+  }
+  .class-sub-dot.completed { opacity: 1; }
+  .class-sub-dot.pending { opacity: 0.28; }
+  .class-sub-info { display: flex; flex-direction: column; gap: 1px; }
+  .class-sub-name { font-size: 11px; font-weight: 600; color: var(--text); line-height: 1.2; }
+  .class-sub-date { font-size: 10px; font-family: 'DM Mono', monospace; color: var(--text2); }
+  .class-progress-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; min-width: 72px; }
+  .class-progress-pct { font-size: 20px; font-weight: 800; font-family: 'DM Mono', monospace; }
+  .class-progress-bar-bg { width: 72px; height: 5px; background: var(--border); border-radius: 3px; }
+  .class-progress-bar { height: 5px; border-radius: 3px; transition: width 1s ease; }
+
+  /* SUBTASK TIMELINE MARKERS on lane */
+  .lane-subtask-marker {
+    position: absolute; top: 50%;
+    width: 8px; height: 8px; border-radius: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    border: 1.5px solid rgba(255,255,255,0.2);
+  }
+
+  /* LEGEND */
+  .race-legend {
+    padding: 20px 32px;
+    border-top: 1px solid var(--border);
+    display: flex; gap: 24px; flex-wrap: wrap; align-items: center;
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text2); }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+
+  /* EMPTY STATE */
+  .empty-state {
+    text-align: center; padding: 60px 20px;
+    color: var(--text2);
+  }
+  .empty-state .empty-icon { font-size: 48px; margin-bottom: 16px; }
+  .empty-state p { font-size: 15px; }
+
+  /* TASKS VIEW */
+  .task-card-icon { font-size: 28px; margin-bottom: 10px; }
+  .subtask-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .subtask-item {
+    background: var(--surface2); border: 1px solid var(--border);
+    padding: 7px 12px; border-radius: 8px; font-size: 12px;
+    display: flex; align-items: center; gap: 8px; justify-content: space-between;
+  }
+  .subtask-color { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+
+  /* DROP RULER ROW — shared bar above all lanes */
+  .drop-ruler-row {
+    display: flex; align-items: flex-end;
+    margin-bottom: 6px;
+  }
+  .drop-ruler-spacer {
+    width: 150px; flex-shrink: 0;
+  }
+  .drop-ruler-lane {
+    flex: 1; position: relative;
+    height: 44px;
+  }
+  .drop-ruler-line {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    height: 1px; background: rgba(247,200,106,0.15);
+    border-bottom: 1px dashed rgba(247,200,106,0.25);
+  }
+  .drop-pin {
+    position: absolute; bottom: 0;
+    transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center;
+    gap: 2px; cursor: default; z-index: 5;
+  }
+  .drop-pin-flag {
+    font-size: 18px; line-height: 1;
+    filter: drop-shadow(0 0 5px rgba(247,200,106,0.9));
+    transition: transform 0.15s;
+  }
+  .drop-pin:hover .drop-pin-flag { transform: scale(1.25); }
+  .drop-pin-label {
+    font-size: 9px; font-family: 'DM Mono', monospace;
+    color: var(--accent2); white-space: nowrap;
+    background: rgba(10,10,15,0.85); padding: 1px 5px;
+    border-radius: 4px; border: 1px solid rgba(247,200,106,0.3);
+    opacity: 0; transition: opacity 0.15s;
+    pointer-events: none;
+  }
+  .drop-pin:hover .drop-pin-label { opacity: 1; }
+  .drop-pin-stem {
+    width: 1px; height: 10px;
+    background: rgba(247,200,106,0.5);
+  }
+  /* DROP card styles */
+  .drop-date-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(247,200,106,0.1); border: 1px solid rgba(247,200,106,0.3);
+    border-radius: 20px; padding: 3px 10px; font-size: 11px;
+    font-family: 'DM Mono', monospace; color: var(--accent2);
+  }
+  .drop-task-chips { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--surface); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* TOAST */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--surface); border: 1px solid var(--accent);
+    color: var(--text); padding: 12px 20px; border-radius: 10px;
+    font-size: 14px; font-weight: 600; z-index: 9999;
+    transform: translateY(60px); opacity: 0;
+    transition: all 0.3s ease; pointer-events: none;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+
+  .img-preview {
+    width: 60px; height: 60px; border-radius: 50%;
+    object-fit: cover; margin-top: 8px; border: 2px solid var(--border);
+    display: none;
+  }
+
+  select option { background: var(--surface); color: var(--text); }
+
+  @media (max-width: 700px) {
+    header { padding: 14px 16px; flex-wrap: wrap; gap: 10px; }
+    .view { padding: 16px; }
+    .race-header { padding: 16px; flex-wrap: wrap; gap: 8px; }
+    .race-track-container { padding: 16px; }
+    .race-user-label { width: 110px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- HEADER -->
+  <header>
+    <div class="logo">Task<span>Race</span><em>.</em></div>
+    <nav>
+      <button class="active" onclick="switchView('race')">🏁 Carrera</button>
+      <button onclick="switchView('users')">👤 Usuarios</button>
+      <button onclick="switchView('tasks')">📋 Tareas</button>
+      <button onclick="switchView('drops')">💧 Drops</button>
+    </nav>
+  </header>
+
+  <!-- RACE VIEW -->
+  <div id="view-race" class="view active">
+    <div class="race-header">
+      <div>
+        <div class="section-title">Carrera de Tareas</div>
+        <div style="color:var(--text2);font-size:13px;font-family:'DM Mono',monospace">Progreso en tiempo real</div>
+      </div>
+      <div class="race-date" id="race-date"></div>
+    </div>
+    <div class="race-track-container">
+      <div class="race-track" id="race-track"></div>
+    </div>
+    <div class="race-legend" id="race-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div> Completada</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--border)"></div> Pendiente</div>
+      <div class="legend-item"><span>🏳️</span> Inicio</div>
+      <div class="legend-item"><span>🏁</span> Meta</div>
+    </div>
+    <div class="race-classification" id="race-classification"></div>
+  </div>
+
+  <!-- USERS VIEW -->
+  <div id="view-users" class="view">
+    <div class="section-title">Usuarios</div>
+    <div class="section-sub">// gestión de participantes</div>
+    <button class="btn-add" onclick="openModal('user')">+ Nuevo Usuario</button>
+    <div class="cards-grid" id="users-grid"></div>
+  </div>
+
+  <!-- TASKS VIEW -->
+  <div id="view-tasks" class="view">
+    <div class="section-title">Tareas</div>
+    <div class="section-sub">// tareas y sub-tareas</div>
+    <button class="btn-add" onclick="openModal('task')">+ Nueva Tarea</button>
+    <div class="cards-grid" id="tasks-grid"></div>
+  </div>
+</div>
+
+<!-- MODAL USER -->
+<div class="modal-backdrop" id="modal-user">
+  <div class="modal">
+    <h3 id="modal-user-title">Nuevo Usuario</h3>
+    <div class="form-group">
+      <label>Nombre</label>
+      <input type="text" id="user-name" placeholder="Ej: María García">
+    </div>
+    <div class="form-group">
+      <label>Imagen (URL o subir)</label>
+      <input type="text" id="user-img-url" placeholder="https://... o pega URL" oninput="previewImg()">
+      <input type="file" id="user-img-file" accept="image/*" style="margin-top:6px" onchange="previewImgFile()">
+      <img id="img-preview" class="img-preview">
+    </div>
+    <div class="form-group">
+      <label>Área de trabajo</label>
+      <select id="user-role">
+        <option value="dev">🧑‍💻 Desarrollador</option>
+        <option value="qa">🔍 QA</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Asignar Tareas</label>
+      <div class="check-list" id="task-checklist"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('user')">Cancelar</button>
+      <button class="btn-primary" onclick="saveUser()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL TASK -->
+<div class="modal-backdrop" id="modal-task">
+  <div class="modal">
+    <h3 id="modal-task-title">Nueva Tarea</h3>
+    <div class="form-group">
+      <label>Nombre de la tarea</label>
+      <input type="text" id="task-name" placeholder="Ej: Desarrollo de API">
+    </div>
+    <div class="form-group">
+      <label>Ícono (emoji)</label>
+      <input type="text" id="task-icon" placeholder="🚀" maxlength="4">
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <label style="font-size:12px;font-weight:600;color:var(--text2);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.5px">Sub-Tareas</label>
+      <button class="btn-sm" style="flex:none;padding:5px 12px" onclick="addSubtaskField()">+ Agregar</button>
+    </div>
+    <div id="subtask-fields"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('task')">Cancelar</button>
+      <button class="btn-primary" onclick="saveTask()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- DROPS VIEW -->
+<div id="view-drops" class="view">
+  <div class="section-title">Drops</div>
+  <div class="section-sub">// hitos de entrega por fecha</div>
+  <button class="btn-add" onclick="openModal('drop')">+ Nuevo Drop</button>
+  <div class="cards-grid" id="drops-grid"></div>
+</div>
+
+<!-- MODAL DROP -->
+<div class="modal-backdrop" id="modal-drop">
+  <div class="modal">
+    <h3 id="modal-drop-title">Nuevo Drop</h3>
+    <div class="form-group">
+      <label>Nombre del Drop</label>
+      <input type="text" id="drop-name" placeholder="Ej: Sprint 1, Release v2.0">
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <label style="font-size:12px;font-weight:600;color:var(--text2);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.5px">Fechas del Drop</label>
+      <button class="btn-sm" style="flex:none;padding:5px 12px" onclick="addDropDateField()">+ Fecha</button>
+    </div>
+    <div id="drop-date-fields"></div>
+    <div style="margin-top:16px">
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text2);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Tareas asociadas</label>
+      <div class="check-list" id="drop-task-checklist"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('drop')">Cancelar</button>
+      <button class="btn-primary" onclick="saveDrop()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// STORAGE
+// ============================================================
+const DB_USERS = 'taskrace_users';
+const DB_TASKS = 'taskrace_tasks';
+
+// We'll use an in-memory store backed by window.storage (persistent artifact storage)
+let users = [];
+let tasks = [];
+let drops = [];
+let editingUserId = null;
+let editingTaskId = null;
+let editingDropId = null;
+
+const COLORS = ['#7c6af7','#f76a9a','#6af7c8','#f7c86a','#f76a6a','#6ac5f7','#c86af7','#f7a06a','#a0f76a','#6a9af7'];
+
+// ============================================================
+// INIT
+// ============================================================
+async function init() {
+  await loadData();
+  renderAll();
+  updateRaceDate();
+  // Demo data if empty
+  if (tasks.length === 0 && users.length === 0) {
+    seedDemo();
+  }
+}
+
+async function loadData() {
+  try {
+    const u = await window.storage.get('users');
+    if (u) users = JSON.parse(u.value);
+  } catch(e) { users = []; }
+  try {
+    const t = await window.storage.get('tasks');
+    if (t) tasks = JSON.parse(t.value);
+  } catch(e) { tasks = []; }
+  try {
+    const d = await window.storage.get('drops');
+    if (d) drops = JSON.parse(d.value);
+  } catch(e) { drops = []; }
+}
+
+async function saveData() {
+  await window.storage.set('users', JSON.stringify(users));
+  await window.storage.set('tasks', JSON.stringify(tasks));
+  await window.storage.set('drops', JSON.stringify(drops));
+}
+
+function seedDemo() {
+  tasks = [
+    { id: uid(), name: 'Frontend', icon: '🎨', subtasks: [
+      { id: uid(), name: 'Diseño UI', date: daysFromNow(-20), color: '#7c6af7' },
+      { id: uid(), name: 'Componentes', date: daysFromNow(-10), color: '#6af7c8' },
+      { id: uid(), name: 'Responsive', date: daysFromNow(5), color: '#f7c86a' },
+    ]},
+    { id: uid(), name: 'Backend API', icon: '⚙️', subtasks: [
+      { id: uid(), name: 'Modelos DB', date: daysFromNow(-15), color: '#f76a9a' },
+      { id: uid(), name: 'Endpoints', date: daysFromNow(-5), color: '#f76a6a' },
+      { id: uid(), name: 'Tests', date: daysFromNow(10), color: '#6ac5f7' },
+    ]},
+    { id: uid(), name: 'QA Testing', icon: '🔍', subtasks: [
+      { id: uid(), name: 'Plan de pruebas', date: daysFromNow(-8), color: '#c86af7' },
+      { id: uid(), name: 'Ejecución', date: daysFromNow(2), color: '#f7a06a' },
+      { id: uid(), name: 'Reporte', date: daysFromNow(15), color: '#a0f76a' },
+    ]},
+  ];
+  users = [
+    { id: uid(), name: 'Ana López', img: '👩‍💻', role: 'dev', taskIds: [tasks[0].id, tasks[1].id],
+      subtaskIds: [tasks[0].subtasks[0].id, tasks[0].subtasks[1].id, tasks[0].subtasks[2].id, tasks[1].subtasks[0].id, tasks[1].subtasks[1].id] },
+    { id: uid(), name: 'Carlos Ruiz', img: '🧑‍🔬', role: 'qa', taskIds: [tasks[2].id],
+      subtaskIds: [tasks[2].subtasks[0].id, tasks[2].subtasks[1].id, tasks[2].subtasks[2].id] },
+    { id: uid(), name: 'Sofía Mora', img: '👩‍🎨', role: 'dev', taskIds: [tasks[0].id],
+      subtaskIds: [tasks[0].subtasks[1].id, tasks[0].subtasks[2].id] },
+    { id: uid(), name: 'Javier Paz', img: '🧑‍💻', role: 'qa', taskIds: [tasks[1].id, tasks[2].id],
+      subtaskIds: [tasks[1].subtasks[0].id, tasks[1].subtasks[2].id, tasks[2].subtasks[0].id] },
+  ];
+  drops = [
+    { id: uid(), name: 'Sprint 1', dates: [daysFromNow(-18), daysFromNow(-10)], taskIds: [tasks[0].id, tasks[1].id] },
+    { id: uid(), name: 'Sprint 2', dates: [daysFromNow(3), daysFromNow(12)], taskIds: [tasks[0].id, tasks[2].id] },
+    { id: uid(), name: 'Release', dates: [daysFromNow(20)], taskIds: [tasks[1].id, tasks[2].id] },
+  ];
+  saveData();
+  renderAll();
+}
+
+function daysFromNow(d) {
+  const dt = new Date();
+  dt.setDate(dt.getDate() + d);
+  return dt.toISOString().split('T')[0];
+}
+
+function uid() { return Math.random().toString(36).slice(2,10); }
+
+// ============================================================
+// VIEW SWITCH
+// ============================================================
+function switchView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  const btns = document.querySelectorAll('nav button');
+  const names = ['race','users','tasks','drops'];
+  btns[names.indexOf(name)].classList.add('active');
+  if (name === 'race') renderRace();
+}
+
+// ============================================================
+// RENDER ALL
+// ============================================================
+function renderAll() {
+  renderUsers();
+  renderTasks();
+  renderDrops();
+  renderRace();
+}
+
+// ============================================================
+// USERS
+// ============================================================
+function renderUsers() {
+  const grid = document.getElementById('users-grid');
+  if (!users.length) { grid.innerHTML = '<div class="empty-state"><div class="empty-icon">👤</div><p>No hay usuarios aún. ¡Agrega el primero!</p></div>'; return; }
+  grid.innerHTML = users.map(u => {
+    const userTasks = tasks.filter(t => (u.taskIds||[]).includes(t.id));
+    const avatarHtml = u.imgData
+      ? `<img src="${u.imgData}">`
+      : `<span>${u.img || '🧑'}</span>`;
+    return `<div class="card">
+      <div class="card-avatar">${avatarHtml}</div>
+      <div class="card-name">${esc(u.name)}</div>
+      <div class="card-meta" style="margin-top:5px">
+        <span class="badge badge-${u.role}">${u.role === 'dev' ? '🧑‍💻 Dev' : '🔍 QA'}</span>
+      </div>
+      <div class="card-tasks">
+        ${userTasks.map(t => `<span class="task-chip">${t.icon||'📋'} ${esc(t.name)}</span>`).join('')}
+        ${!userTasks.length ? '<span style="font-size:11px;color:var(--text2)">Sin tareas asignadas</span>' : ''}
+      </div>
+      <div class="card-actions">
+        <button class="btn-sm" onclick="editUser('${u.id}')">✏️ Editar</button>
+        <button class="btn-sm danger" onclick="deleteUser('${u.id}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// openModal moved to Drops section
+
+function closeModal(type) {
+  document.getElementById('modal-' + type).classList.remove('open');
+  if (type === 'drop') { editingDropId = null; }
+}
+
+function editUser(id) {
+  const u = users.find(x => x.id === id);
+  if (!u) return;
+  editingUserId = id;
+  document.getElementById('modal-user-title').textContent = 'Editar Usuario';
+  document.getElementById('user-name').value = u.name;
+  document.getElementById('user-img-url').value = u.img && u.img.startsWith('http') ? u.img : '';
+  document.getElementById('user-role').value = u.role;
+  const preview = document.getElementById('img-preview');
+  if (u.imgData) { preview.src = u.imgData; preview.style.display = 'block'; }
+  else { preview.style.display = 'none'; }
+  renderTaskChecklist(u.taskIds || [], u.subtaskIds || []);
+  document.getElementById('modal-user').classList.add('open');
+}
+
+function renderTaskChecklist(selectedTaskIds, selectedSubIds) {
+  selectedTaskIds = selectedTaskIds || [];
+  selectedSubIds = selectedSubIds || [];
+  const el = document.getElementById('task-checklist');
+  if (!tasks.length) { el.innerHTML = '<p style="font-size:12px;color:var(--text2)">No hay tareas creadas aún.</p>'; return; }
+
+  el.innerHTML = tasks.map(t => {
+    const sortedSubs = [...(t.subtasks||[])].sort((a,b) => new Date(a.date)-new Date(b.date));
+    const taskChecked = selectedTaskIds.includes(t.id);
+    const hasSubs = sortedSubs.length > 0;
+
+    const subsHtml = hasSubs ? `
+      <div class="subtask-check-list ${taskChecked ? 'open' : ''}" id="stlist-${t.id}">
+        ${sortedSubs.map(s => `
+          <label class="subtask-check-item">
+            <input type="checkbox" class="sub-check" data-task="${t.id}" value="${s.id}" ${selectedSubIds.includes(s.id)?'checked':''}>
+            <div class="subtask-dot" style="background:${s.color}"></div>
+            <span class="subtask-check-name">${esc(s.name)}</span>
+            <span class="subtask-check-date">${s.date}</span>
+          </label>
+        `).join('')}
+      </div>` : '';
+
+    return `
+      <div class="task-check-group">
+        <div class="task-check-header" onclick="toggleTaskGroup('${t.id}')">
+          <input type="checkbox" class="task-main-check" value="${t.id}" ${taskChecked?'checked':''}
+            onclick="event.stopPropagation(); handleTaskCheck(this, '${t.id}')">
+          <span class="task-check-header-label">${t.icon||'📋'} ${esc(t.name)}</span>
+          ${hasSubs ? `<span class="task-check-toggle ${taskChecked?'open':''}" id="toggle-${t.id}">▼</span>` : ''}
+        </div>
+        ${subsHtml}
+      </div>`;
+  }).join('');
+}
+
+function toggleTaskGroup(taskId) {
+  const list = document.getElementById('stlist-' + taskId);
+  const toggle = document.getElementById('toggle-' + taskId);
+  if (list) { list.classList.toggle('open'); }
+  if (toggle) { toggle.classList.toggle('open'); }
+}
+
+function handleTaskCheck(cb, taskId) {
+  const list = document.getElementById('stlist-' + taskId);
+  const toggle = document.getElementById('toggle-' + taskId);
+  if (cb.checked) {
+    if (list) list.classList.add('open');
+    if (toggle) toggle.classList.add('open');
+  } else {
+    // uncheck all subtasks of this task
+    document.querySelectorAll(`.sub-check[data-task="${taskId}"]`).forEach(s => s.checked = false);
+  }
+}
+
+let pendingImgData = null;
+
+function previewImg() {
+  const url = document.getElementById('user-img-url').value.trim();
+  const preview = document.getElementById('img-preview');
+  if (url) { preview.src = url; preview.style.display = 'block'; pendingImgData = null; }
+  else { preview.style.display = 'none'; }
+}
+
+function previewImgFile() {
+  const file = document.getElementById('user-img-file').files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    pendingImgData = e.target.result;
+    const preview = document.getElementById('img-preview');
+    preview.src = pendingImgData;
+    preview.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function saveUser() {
+  const name = document.getElementById('user-name').value.trim();
+  if (!name) { toast('⚠️ Ingresa un nombre'); return; }
+  const role = document.getElementById('user-role').value;
+  const imgUrl = document.getElementById('user-img-url').value.trim();
+  const taskIds = [...document.querySelectorAll('.task-main-check:checked')].map(x => x.value);
+  const subtaskIds = [...document.querySelectorAll('.sub-check:checked')].map(x => x.value);
+
+  const roleEmoji = role === 'dev' ? '🧑‍💻' : '🔍';
+  const imgData = pendingImgData || null;
+  const img = imgUrl || roleEmoji;
+
+  if (editingUserId) {
+    const u = users.find(x => x.id === editingUserId);
+    Object.assign(u, { name, img, imgData, role, taskIds, subtaskIds });
+  } else {
+    users.push({ id: uid(), name, img, imgData, role, taskIds, subtaskIds });
+  }
+  pendingImgData = null;
+  saveData(); renderAll(); closeModal('user');
+  toast('✅ Usuario guardado');
+}
+
+function deleteUser(id) {
+  users = users.filter(u => u.id !== id);
+  saveData(); renderAll();
+  toast('🗑 Usuario eliminado');
+}
+
+// ============================================================
+// TASKS
+// ============================================================
+function renderTasks() {
+  const grid = document.getElementById('tasks-grid');
+  if (!tasks.length) { grid.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>No hay tareas aún.</p></div>'; return; }
+  grid.innerHTML = tasks.map(t => `
+    <div class="card">
+      <div class="task-card-icon">${t.icon||'📋'}</div>
+      <div class="card-name">${esc(t.name)}</div>
+      <div class="subtask-list">
+        ${(t.subtasks||[]).map(s => `
+          <div class="subtask-item">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="subtask-color" style="background:${s.color}"></div>
+              <span>${esc(s.name)}</span>
+            </div>
+            <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text2)">${s.date}</span>
+          </div>
+        `).join('')}
+        ${!(t.subtasks||[]).length ? '<span style="font-size:11px;color:var(--text2)">Sin sub-tareas</span>' : ''}
+      </div>
+      <div class="card-actions" style="margin-top:14px">
+        <button class="btn-sm" onclick="editTask('${t.id}')">✏️ Editar</button>
+        <button class="btn-sm danger" onclick="deleteTask('${t.id}')">🗑</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+let subtaskCount = 0;
+
+function addSubtaskField(data = {}) {
+  subtaskCount++;
+  const id = 'st' + subtaskCount;
+  const colorDots = COLORS.map((c, i) => `
+    <div class="color-dot ${data.color === c ? 'selected' : ''}" 
+         style="background:${c}" 
+         data-color="${c}"
+         onclick="selectColor(this, '${id}')"></div>
+  `).join('');
+  const div = document.createElement('div');
+  div.id = id;
+  div.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px';
+  div.innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <input type="text" placeholder="Nombre sub-tarea" value="${esc(data.name||'')}"
+             style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-family:'Syne',sans-serif;font-size:13px;outline:none"
+             class="st-name" data-id="${id}">
+      <input type="date" value="${data.date||''}"
+             style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-family:'DM Mono',sans-serif;font-size:12px;outline:none"
+             class="st-date" data-id="${id}">
+      <button onclick="document.getElementById('${id}').remove()" 
+              style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px">✕</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace">Color:</span>
+      <div class="color-picker" id="cp-${id}">${colorDots}</div>
+      <input type="hidden" class="st-color" data-id="${id}" value="${data.color||COLORS[0]}">
+    </div>
+  `;
+  document.getElementById('subtask-fields').appendChild(div);
+  if (!data.color) selectColor(div.querySelector('.color-dot'), id);
+}
+
+function selectColor(dot, stId) {
+  const cp = document.getElementById('cp-' + stId);
+  if (cp) cp.querySelectorAll('.color-dot').forEach(d => d.classList.remove('selected'));
+  dot.classList.add('selected');
+  const input = document.querySelector(`.st-color[data-id="${stId}"]`);
+  if (input) input.value = dot.dataset.color;
+}
+
+function saveTask() {
+  const name = document.getElementById('task-name').value.trim();
+  if (!name) { toast('⚠️ Ingresa un nombre'); return; }
+  const icon = document.getElementById('task-icon').value.trim() || '📋';
+  const stFields = document.getElementById('subtask-fields');
+  const subtasks = [];
+  stFields.querySelectorAll('[id^="st"]').forEach(div => {
+    const n = div.querySelector('.st-name')?.value.trim();
+    const d = div.querySelector('.st-date')?.value;
+    const c = div.querySelector('.st-color')?.value || COLORS[0];
+    if (n && d) subtasks.push({ id: uid(), name: n, date: d, color: c });
+  });
+
+  if (editingTaskId) {
+    const t = tasks.find(x => x.id === editingTaskId);
+    Object.assign(t, { name, icon, subtasks });
+  } else {
+    tasks.push({ id: uid(), name, icon, subtasks });
+  }
+  saveData(); renderAll(); closeModal('task');
+  toast('✅ Tarea guardada');
+}
+
+function editTask(id) {
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+  editingTaskId = id;
+  document.getElementById('modal-task-title').textContent = 'Editar Tarea';
+  document.getElementById('task-name').value = t.name;
+  document.getElementById('task-icon').value = t.icon || '';
+  document.getElementById('subtask-fields').innerHTML = '';
+  subtaskCount = 0;
+  (t.subtasks||[]).forEach(s => addSubtaskField(s));
+  document.getElementById('modal-task').classList.add('open');
+}
+
+function deleteTask(id) {
+  tasks = tasks.filter(t => t.id !== id);
+  users.forEach(u => { u.taskIds = (u.taskIds||[]).filter(tid => tid !== id); });
+  saveData(); renderAll();
+  toast('🗑 Tarea eliminada');
+}
+
+
+// ============================================================
+// DROPS
+// ============================================================
+function renderDrops() {
+  const grid = document.getElementById('drops-grid');
+  if (!grid) return;
+  if (!drops.length) { grid.innerHTML = '<div class="empty-state"><div class="empty-icon">💧</div><p>No hay drops aún.</p></div>'; return; }
+  grid.innerHTML = drops.map(d => {
+    const dropTasks = tasks.filter(t => (d.taskIds||[]).includes(t.id));
+    const dateChips = (d.dates||[]).sort().map(dt => `<span class="drop-date-chip">📅 ${dt}</span>`).join('');
+    return `<div class="card">
+      <div style="font-size:28px;margin-bottom:8px">💧</div>
+      <div class="card-name">${esc(d.name)}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px">${dateChips}</div>
+      <div class="drop-task-chips">
+        ${dropTasks.map(t => `<span class="task-chip">${t.icon||'📋'} ${esc(t.name)}</span>`).join('')}
+        ${!dropTasks.length ? '<span style="font-size:11px;color:var(--text2)">Sin tareas</span>' : ''}
+      </div>
+      <div class="card-actions" style="margin-top:14px">
+        <button class="btn-sm" onclick="editDrop('${d.id}')">✏️ Editar</button>
+        <button class="btn-sm danger" onclick="deleteDrop('${d.id}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+let dropDateCount = 0;
+function addDropDateField(val = '') {
+  dropDateCount++;
+  const id = 'dd' + dropDateCount;
+  const div = document.createElement('div');
+  div.id = id;
+  div.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center';
+  div.innerHTML = `
+    <input type="date" value="${val}" class="drop-date-input"
+      style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-family:'DM Mono',sans-serif;font-size:13px;outline:none">
+    <button onclick="document.getElementById('${id}').remove()"
+      style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px">✕</button>`;
+  document.getElementById('drop-date-fields').appendChild(div);
+}
+
+function renderDropTaskChecklist(selectedIds) {
+  const el = document.getElementById('drop-task-checklist');
+  if (!el) return;
+  if (!tasks.length) { el.innerHTML = '<p style="font-size:12px;color:var(--text2)">No hay tareas creadas aún.</p>'; return; }
+  el.innerHTML = tasks.map(t => `
+    <label class="check-item" style="display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border);padding:8px 12px;border-radius:8px;cursor:pointer">
+      <input type="checkbox" class="drop-task-check" value="${t.id}" ${(selectedIds||[]).includes(t.id)?'checked':''} style="accent-color:var(--accent);width:16px;height:16px">
+      <span>${t.icon||'📋'} ${esc(t.name)}</span>
+    </label>`).join('');
+}
+
+function openModal(type) {
+  if (type === 'user') {
+    editingUserId = null;
+    document.getElementById('modal-user-title').textContent = 'Nuevo Usuario';
+    document.getElementById('user-name').value = '';
+    document.getElementById('user-img-url').value = '';
+    document.getElementById('user-img-file').value = '';
+    document.getElementById('img-preview').style.display = 'none';
+    document.getElementById('user-role').value = 'dev';
+    renderTaskChecklist([], []);
+    document.getElementById('modal-user').classList.add('open');
+  } else if (type === 'task') {
+    editingTaskId = null;
+    document.getElementById('modal-task-title').textContent = 'Nueva Tarea';
+    document.getElementById('task-name').value = '';
+    document.getElementById('task-icon').value = '';
+    document.getElementById('subtask-fields').innerHTML = '';
+    document.getElementById('modal-task').classList.add('open');
+  } else if (type === 'drop') {
+    editingDropId = null;
+    document.getElementById('modal-drop-title').textContent = 'Nuevo Drop';
+    document.getElementById('drop-name').value = '';
+    document.getElementById('drop-date-fields').innerHTML = '';
+    dropDateCount = 0;
+    addDropDateField();
+    renderDropTaskChecklist([]);
+    document.getElementById('modal-drop').classList.add('open');
+  }
+}
+
+function editDrop(id) {
+  const d = drops.find(x => x.id === id);
+  if (!d) return;
+  editingDropId = id;
+  document.getElementById('modal-drop-title').textContent = 'Editar Drop';
+  document.getElementById('drop-name').value = d.name;
+  document.getElementById('drop-date-fields').innerHTML = '';
+  dropDateCount = 0;
+  (d.dates||[]).forEach(dt => addDropDateField(dt));
+  if (!(d.dates||[]).length) addDropDateField();
+  renderDropTaskChecklist(d.taskIds||[]);
+  document.getElementById('modal-drop').classList.add('open');
+}
+
+function saveDrop() {
+  const name = document.getElementById('drop-name').value.trim();
+  if (!name) { toast('⚠️ Ingresa un nombre para el Drop'); return; }
+  const dates = [...document.querySelectorAll('.drop-date-input')]
+    .map(i => i.value).filter(Boolean).sort();
+  if (!dates.length) { toast('⚠️ Agrega al menos una fecha'); return; }
+  const taskIds = [...document.querySelectorAll('.drop-task-check:checked')].map(x => x.value);
+  if (editingDropId) {
+    const d = drops.find(x => x.id === editingDropId);
+    Object.assign(d, { name, dates, taskIds });
+  } else {
+    drops.push({ id: uid(), name, dates, taskIds });
+  }
+  saveData(); renderAll(); closeModal('drop');
+  toast('✅ Drop guardado');
+}
+
+function deleteDrop(id) {
+  drops = drops.filter(d => d.id !== id);
+  saveData(); renderAll();
+  toast('🗑 Drop eliminado');
+}
+
+// ============================================================
+// RACE VIEW
+// ============================================================
+function updateRaceDate() {
+  const el = document.getElementById('race-date');
+  const now = new Date();
+  el.textContent = now.toLocaleDateString('es', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+}
+
+function getUserSubtasksByTask(u) {
+  const userTasks = tasks.filter(t => (u.taskIds||[]).includes(t.id));
+  const groups = [];
+  userTasks.forEach(t => {
+    const subs = (t.subtasks||[])
+      .filter(s => { const ids = u.subtaskIds||[]; return !ids.length || ids.includes(s.id); })
+      .sort((a,b) => new Date(a.date)-new Date(b.date));
+    if (subs.length) groups.push({ task: t, subs });
+  });
+  return groups;
+}
+
+function renderRace() {
+  const track = document.getElementById('race-track');
+  const classPanel = document.getElementById('race-classification');
+  const usersWithTasks = users.filter(u => (u.taskIds||[]).length > 0);
+
+  if (!usersWithTasks.length) {
+    track.innerHTML = '<div class="empty-state"><div class="empty-icon">🏁</div><p>Asigna tareas a usuarios para ver la carrera</p></div>';
+    if (classPanel) classPanel.innerHTML = '';
+    return;
+  }
+
+  const now = new Date();
+  now.setHours(0,0,0,0);
+
+  // Build per-user race data
+  const raceData = usersWithTasks.map(u => {
+    const byTask = getUserSubtasksByTask(u);
+    const allSubs = byTask.flatMap(g => g.subs);
+    if (!allSubs.length) return null;
+    const sorted = [...allSubs].sort((a,b) => new Date(a.date)-new Date(b.date));
+    const firstDate = new Date(sorted[0].date); firstDate.setHours(0,0,0,0);
+    const lastDate  = new Date(sorted[sorted.length-1].date); lastDate.setHours(0,0,0,0);
+    const totalMs = (lastDate - firstDate) || 1;
+    const clamped = now < firstDate ? firstDate : (now > lastDate ? lastDate : now);
+    const pct = Math.min(100, Math.max(0, ((clamped - firstDate) / totalMs) * 100));
+    return { u, byTask, allSubs: sorted, firstDate, lastDate, totalMs, pct };
+  }).filter(Boolean);
+
+  if (!raceData.length) {
+    track.innerHTML = '<div class="empty-state"><div class="empty-icon">🏁</div><p>Configura subtareas con fechas para ver la carrera</p></div>';
+    if (classPanel) classPanel.innerHTML = '';
+    return;
+  }
+
+  // Global time range across all users (for the drop ruler)
+  const globalFirst = new Date(Math.min(...raceData.map(r => r.firstDate)));
+  const globalLast  = new Date(Math.max(...raceData.map(r => r.lastDate)));
+  globalFirst.setHours(0,0,0,0);
+  globalLast.setHours(0,0,0,0);
+  const globalMs = (globalLast - globalFirst) || 1;
+
+  // Collect all drop dates (unique) across all drops
+  const allDropPins = [];
+  drops.forEach(d => {
+    (d.dates||[]).forEach(dt => {
+      const dd = new Date(dt); dd.setHours(0,0,0,0);
+      const dp = Math.min(100, Math.max(0, ((dd - globalFirst) / globalMs) * 100));
+      allDropPins.push({ name: d.name, date: dt, pct: dp });
+    });
+  });
+
+  // Build drop ruler HTML
+  const dropPinsHtml = allDropPins.map(p =>
+    `<div class="drop-pin" style="left:${p.pct}%" title="${esc(p.name)}: ${p.date}">
+      <span class="drop-pin-label">${esc(p.name)}<br>${p.date}</span>
+      <span class="drop-pin-flag">🏁</span>
+      <div class="drop-pin-stem"></div>
+    </div>`
+  ).join('');
+
+  const dropRulerHtml = allDropPins.length ? `
+    <div class="drop-ruler-row">
+      <div class="drop-ruler-spacer"></div>
+      <div class="drop-ruler-lane">
+        <div class="drop-ruler-line"></div>
+        ${dropPinsHtml}
+      </div>
+    </div>` : '';
+
+  // ── TRACK ──
+  const rowsHtml = raceData.map(({ u, byTask, allSubs, firstDate, totalMs, pct }) => {
+    const lineColor = u.role === 'dev' ? 'var(--dev)' : 'var(--qa)';
+    const av = u.imgData ? `<img src="${u.imgData}">` : `<span>${u.img||'🧑'}</span>`;
+
+    // Grouped dots: icon + circles per task
+    const groupedDots = byTask.map(g => {
+      const circles = g.subs.map(s => {
+        const done = new Date(s.date) <= now;
+        return `<div class="runner-dot ${done?'completed':'pending'}" style="background:${s.color}" title="${esc(s.name)} (${s.date})"></div>`;
+      }).join('');
+      return `<div class="runner-task-group"><span class="runner-task-icon">${g.task.icon||'📋'}</span>${circles}</div>`;
+    }).join('');
+
+    // Lane subtask markers — positioned relative to this user's own range
+    const markers = allSubs.map(s => {
+      const sd = new Date(s.date); sd.setHours(0,0,0,0);
+      const mp = Math.min(100, Math.max(0, ((sd - firstDate) / totalMs) * 100));
+      const done = sd <= now;
+      return `<div class="lane-subtask-marker" style="left:${mp}%;background:${s.color};opacity:${done?0.9:0.3}" title="${esc(s.name)}: ${s.date}"></div>`;
+    }).join('');
+
+    return `<div class="race-row">
+      <div class="race-user-label">
+        <div class="race-user-avatar">${av}</div>
+        <div class="race-user-info">
+          <div class="race-user-name">${esc(u.name)}</div>
+          <div class="race-user-role" style="color:${lineColor}">${u.role==='dev'?'Dev':'QA'}</div>
+        </div>
+      </div>
+      <div class="race-lane">
+        <div class="lane-line"></div>
+        <div class="lane-line-fill" style="background:${lineColor};width:${pct}%"></div>
+        ${markers}
+        <div class="lane-start-flag">🏳️</div>
+        <div class="lane-end-flag">🏁</div>
+        <div class="lane-runner" style="left:calc(${pct}% * (100% - 44px) / 100% + 22px)">
+          <div class="runner-wrap">
+            <div class="runner-dots">${groupedDots}</div>
+            <div class="runner-avatar" style="border-color:${lineColor};box-shadow:0 0 16px ${lineColor}55">${av}</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  track.innerHTML = dropRulerHtml + rowsHtml;
+
+  // ── CLASSIFICATION ──
+  if (!classPanel) return;
+  const ranked = [...raceData].sort((a,b) => b.pct - a.pct);
+  const medals = ['🥇','🥈','🥉'];
+
+  classPanel.innerHTML = `<div class="class-title">🏆 Clasificación</div><div class="class-table">` +
+    ranked.map(({ u, byTask, pct }, i) => {
+      const lineColor = u.role === 'dev' ? 'var(--dev)' : 'var(--qa)';
+      const av = u.imgData ? `<img src="${u.imgData}">` : `<span>${u.img||'🧑'}</span>`;
+      const rank = i < 3 ? medals[i] : `${i+1}`;
+
+      const taskGroupsHtml = byTask.map(g => {
+        const subsHtml = g.subs.map(s => {
+          const done = new Date(s.date) <= now;
+          return `<div class="class-sub-entry">
+            <div class="class-sub-dot ${done?'completed':'pending'}" style="background:${s.color}" title="${esc(s.name)} · ${s.date}"></div>
+            <div class="class-sub-info">
+              <span class="class-sub-name">${esc(s.name)}</span>
+              <span class="class-sub-date">${s.date}</span>
+            </div>
+          </div>`;
+        }).join('');
+        return `<div class="class-task-group">
+          <span class="class-task-icon">${g.task.icon||'📋'}</span>
+          <span class="class-task-name">${esc(g.task.name)}</span>
+          <div class="class-sub-dot-wrap">${subsHtml}</div>
+        </div>`;
+      }).join('');
+
+      return `<div class="class-row">
+        <div class="class-rank">${rank}</div>
+        <div class="class-user-avatar">${av}</div>
+        <div class="class-user-info">
+          <div class="class-user-name">${esc(u.name)}</div>
+          <div class="class-user-role" style="color:${lineColor}">${u.role==='dev'?'🧑‍💻 Dev':'🔍 QA'}</div>
+        </div>
+        <div class="class-tasks">${taskGroupsHtml}</div>
+        <div class="class-progress-wrap">
+          <div class="class-progress-pct" style="color:${lineColor}">${Math.round(pct)}%</div>
+          <div class="class-progress-bar-bg"><div class="class-progress-bar" style="width:${pct}%;background:${lineColor}"></div></div>
+        </div>
+      </div>`;
+    }).join('') + `</div>`;
+}
+
+// ============================================================
+// UTILS
+// ============================================================
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// Close modals clicking backdrop
+document.querySelectorAll('.modal-backdrop').forEach(b => {
+  b.addEventListener('click', e => {
+    if (e.target === b) b.classList.remove('open');
+  });
+});
+
+// ============================================================
+// START
+// ============================================================
+init();
+</script>
+</body>
+</html>
