@@ -137,7 +137,8 @@ nav button.active{color:var(--accent);border-color:var(--accent);background:rgba
 .lane-end-flag{position:absolute;right:0;top:50%;transform:translateY(-50%);font-size:24px;z-index:3}
 
 /* SUBTASK MARKERS on lane */
-.lane-sub-marker{position:absolute;top:50%;width:10px;height:10px;border-radius:50%;transform:translate(-50%,-50%);z-index:20;border:2px solid #000;box-shadow:0 1px 3px rgba(0,0,0,.5)}
+.lane-sub-marker{position:absolute;top:50%;width:10px;height:10px;border-radius:50%;transform:translate(-50%,-50%);z-index:20;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.5)}
+.lane-sub-marker.on-avatar{border-color:#ff3b3b;z-index:30;box-shadow:0 0 0 1px rgba(255,59,59,.4),0 1px 4px rgba(0,0,0,.6)}
 .avatar-overlay{position:absolute;inset:0;border-radius:50%;pointer-events:none;z-index:15}
 .avatar-overlay-dot{position:absolute;width:12px;height:12px;border-radius:50%;border:2px solid #fff;transform:translate(-50%,-50%);cursor:default;pointer-events:all;transition:transform .15s;box-shadow:0 1px 4px rgba(0,0,0,.6)}
 .avatar-overlay-dot:hover{transform:translate(-50%,-50%) scale(1.5);z-index:20}
@@ -850,32 +851,12 @@ function renderRace(){
     const todayClamped=now<globalFirst?globalFirst:(now>globalLast?globalLast:now);
     const runnerPct=Math.min(100,Math.max(0,((todayClamped-globalFirst)/globalMs)*100));
 
-    // Split subtasks: overlapping with runner (±3%) go on avatar, rest stay on lane
+    // Markers: coincide con runner → borde rojo y encima del avatar; resto → borde blanco
     const OVERLAP_THRESHOLD=3;
-    const onAvatar=[], onLane=[];
-    allSubs.forEach(s=>{
+    const markers=allSubs.map(s=>{
       const p=pctOf(s.date);
-      Math.abs(p-runnerPct)<=OVERLAP_THRESHOLD ? onAvatar.push({...s,p}) : onLane.push({...s,p});
-    });
-
-    // Lane markers — normal, but with white border
-    const markers=onLane.map(s=>{
-      const done=new Date(s.date)<=now;
-      return `<div class="lane-sub-marker" style="left:${s.p}%;background:${s.color}" title="${esc(s.name)}: ${s.date}"></div>`;
-    }).join('');
-
-    // Avatar overlay dots — only the ones that coincide with runner position
-    const avatarDots=onAvatar.map((s,i)=>{
-      const done=new Date(s.date)<=now;
-      // distribute vertically in a small column centered on avatar
-      const total=onAvatar.length;
-      const angle=(2*Math.PI/Math.max(total,1))*i - Math.PI/2;
-      const r=44;
-      const x=50+r*Math.cos(angle);
-      const y=50+r*Math.sin(angle);
-      return `<div class="avatar-overlay-dot"
-        style="left:${x}%;top:${y}%;background:${s.color};filter:${done?'none':'brightness(.4)'}"
-        title="${esc(s.name)}: ${s.date}"></div>`;
+      const overlaps=Math.abs(p-runnerPct)<=OVERLAP_THRESHOLD;
+      return `<div class="lane-sub-marker ${overlaps?'on-avatar':''}" style="left:${p}%;background:${s.color}" title="${esc(s.name)}: ${s.date}"></div>`;
     }).join('');
 
     return `<div class="race-row">
@@ -894,9 +875,8 @@ function renderRace(){
         <div class="lane-runner" style="left:calc(${runnerPct}% * (100% - 44px) / 100% + 22px)">
           <div class="runner-wrap">
             <div class="runner-dots">${groupedDots}</div>
-            <div class="runner-avatar" style="border-color:${lineColor};box-shadow:0 0 16px ${lineColor}55;position:relative">
+            <div class="runner-avatar" style="border-color:${lineColor};box-shadow:0 0 16px ${lineColor}55">
               ${av}
-              ${avatarDots?`<div class="avatar-overlay">${avatarDots}</div>`:''}
             </div>
           </div>
         </div>
