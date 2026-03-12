@@ -146,7 +146,7 @@ nav button.active{color:var(--accent);border-color:var(--accent);background:rgba
 
 /* RUNNER */
 .lane-runner{position:absolute;top:50%;transform:translate(-50%,-50%);z-index:10;transition:left 1s cubic-bezier(.4,0,.2,1)}
-.runner-wrap{position:relative;display:flex;flex-direction:column;align-items:center}
+.runner-wrap{position:relative;display:flex;flex-direction:column;align-items:center;overflow:visible}
 .runner-avatar{width:42px;height:42px;border-radius:50%;background:var(--surface2);border:3px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:18px;overflow:hidden}
 .runner-avatar img{width:100%;height:100%;object-fit:cover}
 
@@ -338,7 +338,7 @@ select option{background:var(--surface);color:var(--text)}
 
 <script>
 // ============================================================
-// SUPABASE CONFIG
+// SUPABASE
 // ============================================================
 const SUPA_URL = 'https://hccylntvfeloodbnigsq.supabase.co';
 const SUPA_KEY = 'sb_publishable_Q4LlI6AN0ptTsf74IAGVmA_LHwOaRFG';
@@ -348,38 +348,28 @@ const H = {
   'Content-Type': 'application/json',
   'Prefer': 'return=representation'
 };
-
-async function sbGet(table) {
-  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?select=*&order=created_at.asc`, {headers:H});
-  if (!r.ok) { console.error('GET', table, await r.text()); return []; }
+async function sbGet(table){
+  const r=await fetch(`${SUPA_URL}/rest/v1/${table}?select=*&order=created_at.asc`,{headers:H});
+  if(!r.ok){console.error('GET',table,await r.text());return[];}
   return r.json();
 }
-async function sbInsert(table, row) {
-  const r = await fetch(`${SUPA_URL}/rest/v1/${table}`, {method:'POST', headers:H, body:JSON.stringify(row)});
-  if (!r.ok) { console.error('INSERT', table, await r.text()); return null; }
-  const d = await r.json(); return Array.isArray(d) ? d[0] : d;
+async function sbInsert(table,row){
+  const r=await fetch(`${SUPA_URL}/rest/v1/${table}`,{method:'POST',headers:H,body:JSON.stringify(row)});
+  if(!r.ok){console.error('INSERT',table,await r.text());return null;}
+  const d=await r.json();return Array.isArray(d)?d[0]:d;
 }
-async function sbUpdate(table, id, row) {
-  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`, {method:'PATCH', headers:H, body:JSON.stringify(row)});
-  if (!r.ok) { console.error('UPDATE', table, await r.text()); return null; }
-  const d = await r.json(); return Array.isArray(d) ? d[0] : d;
+async function sbUpdate(table,id,row){
+  const r=await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`,{method:'PATCH',headers:H,body:JSON.stringify(row)});
+  if(!r.ok){console.error('UPDATE',table,await r.text());return null;}
+  const d=await r.json();return Array.isArray(d)?d[0]:d;
 }
-async function sbDelete(table, id) {
-  const r = await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`, {method:'DELETE', headers:H});
-  if (!r.ok) console.error('DELETE', table, await r.text());
+async function sbDelete(table,id){
+  const r=await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${id}`,{method:'DELETE',headers:H});
+  if(!r.ok)console.error('DELETE',table,await r.text());
 }
-
-// DB row → app object
-function normUser(r) {
-  return {id:r.id, name:r.name, img:r.img, imgData:r.img_data, role:r.role,
-          taskIds:r.task_ids||[], subtaskIds:r.subtask_ids||[]};
-}
-function normTask(r) {
-  return {id:r.id, name:r.name, icon:r.icon, active:r.active!==false, subtasks:r.subtasks||[]};
-}
-function normDrop(r) {
-  return {id:r.id, name:r.name, date:r.date, active:r.active!==false};
-}
+function normUser(r){return{id:r.id,name:r.name,img:r.img,imgData:r.img_data,role:r.role,taskIds:r.task_ids||[],subtaskIds:r.subtask_ids||[]};}
+function normTask(r){return{id:r.id,name:r.name,icon:r.icon,active:r.active!==false,subtasks:r.subtasks||[]};}
+function normDrop(r){return{id:r.id,name:r.name,date:r.date,active:r.active!==false};}
 
 // ============================================================
 // STATE
@@ -391,32 +381,25 @@ const COLORS=['#7c6af7','#f76a9a','#6af7c8','#f7c86a','#f76a6a','#6ac5f7','#c86a
 // ============================================================
 // INIT
 // ============================================================
-function showLoader(on) {
-  let el = document.getElementById('app-loader');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'app-loader';
-    el.style.cssText = 'position:fixed;inset:0;background:rgba(10,10,15,.92);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:14px';
-    el.innerHTML = '<div style="font-size:40px;animation:spin 1s linear infinite">⚙️</div><div style="font-family:Syne,sans-serif;font-size:16px;color:#e8e8f0">Conectando con Supabase...</div>';
-    const s = document.createElement('style');
-    s.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
-    document.head.appendChild(s);
-    document.body.appendChild(el);
+function showLoader(on){
+  let el=document.getElementById('app-loader');
+  if(!el){
+    el=document.createElement('div');
+    el.id='app-loader';
+    el.style.cssText='position:fixed;inset:0;background:rgba(10,10,15,.92);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:14px';
+    el.innerHTML='<div style="font-size:40px;animation:spin 1s linear infinite">⚙️</div><div style="font-family:Syne,sans-serif;font-size:16px;color:#e8e8f0">Conectando...</div>';
+    const s=document.createElement('style');s.textContent='@keyframes spin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(s);document.body.appendChild(el);
   }
-  el.style.display = on ? 'flex' : 'none';
+  el.style.display=on?'flex':'none';
 }
 
-async function init() {
+async function init(){
   showLoader(true);
-  try {
-    const [ru, rt, rd] = await Promise.all([sbGet('users'), sbGet('tasks'), sbGet('drops')]);
-    users = ru.map(normUser);
-    tasks = rt.map(normTask);
-    drops = rd.map(normDrop);
-  } catch(e) {
-    console.error(e);
-    toast('❌ Error conectando a Supabase');
-  }
+  try{
+    const [ru,rt,rd]=await Promise.all([sbGet('users'),sbGet('tasks'),sbGet('drops')]);
+    users=ru.map(normUser); tasks=rt.map(normTask); drops=rd.map(normDrop);
+  }catch(e){console.error(e);toast('❌ Error conectando a Supabase');}
   showLoader(false);
   renderAll();
   setInterval(()=>document.getElementById('race-date').textContent=
@@ -559,18 +542,18 @@ async function saveUser(){
   const subtaskIds=[...document.querySelectorAll('.sub-check:checked')].map(x=>x.value);
   const img=imgUrl||(role==='dev'?'🧑‍💻':'🔍');
   const imgData=pendingImgData||null;
-  const row={name, img, img_data:imgData, role, task_ids:taskIds, subtask_ids:subtaskIds};
+  const row={name,img,img_data:imgData,role,task_ids:taskIds,subtask_ids:subtaskIds};
   if(editingUserId){
-    const saved=await sbUpdate('users', editingUserId, row);
-    if(saved){ const u=users.find(x=>x.id===editingUserId); Object.assign(u, normUser({...row, id:editingUserId})); }
+    const saved=await sbUpdate('users',editingUserId,row);
+    if(saved){const u=users.find(x=>x.id===editingUserId);Object.assign(u,normUser({...row,id:editingUserId}));}
   } else {
-    const saved=await sbInsert('users', row);
+    const saved=await sbInsert('users',row);
     if(saved) users.push(normUser(saved));
   }
   pendingImgData=null; renderAll(); closeModal('user'); toast('✅ Usuario guardado');
 }
 async function deleteUser(id){
-  await sbDelete('users', id);
+  await sbDelete('users',id);
   users=users.filter(u=>u.id!==id); renderAll(); toast('🗑 Usuario eliminado');
 }
 
@@ -663,17 +646,17 @@ async function saveTask(){
   document.getElementById('subtask-fields').querySelectorAll('[id^="st"]').forEach(div=>{
     const n=div.querySelector('.st-name')?.value.trim();
     const d=div.querySelector('.st-date')?.value;
-    const c=div.querySelector('.st-color')?.value||COLORS[0];
+    const col=div.querySelector('.st-color')?.value||COLORS[0];
     const dr=div.querySelector('.st-drop')?.value||null;
     const sa=div.querySelector('.st-active')?.checked!==false;
-    if(n&&d) subtasks.push({id:uid(),name:n,date:d,color:c,dropId:dr||null,active:sa});
+    if(n&&d) subtasks.push({id:uid(),name:n,date:d,color:col,dropId:dr||null,active:sa});
   });
-  const row={name, icon, active, subtasks};
+  const row={name,icon,active,subtasks};
   if(editingTaskId){
-    const saved=await sbUpdate('tasks', editingTaskId, row);
-    if(saved){ const t=tasks.find(x=>x.id===editingTaskId); Object.assign(t, normTask({...row, id:editingTaskId})); }
+    const saved=await sbUpdate('tasks',editingTaskId,row);
+    if(saved){const t=tasks.find(x=>x.id===editingTaskId);Object.assign(t,normTask({...row,id:editingTaskId}));}
   } else {
-    const saved=await sbInsert('tasks', row);
+    const saved=await sbInsert('tasks',row);
     if(saved) tasks.push(normTask(saved));
   }
   renderAll(); closeModal('task'); toast('✅ Tarea guardada');
@@ -693,9 +676,9 @@ function editTask(id){
 }
 
 async function deleteTask(id){
-  await sbDelete('tasks', id);
+  await sbDelete('tasks',id);
   tasks=tasks.filter(t=>t.id!==id);
-  users.forEach(u=>{ u.taskIds=(u.taskIds||[]).filter(tid=>tid!==id); });
+  users.forEach(u=>{u.taskIds=(u.taskIds||[]).filter(tid=>tid!==id);});
   renderAll(); toast('🗑 Tarea eliminada');
 }
 
@@ -737,19 +720,19 @@ async function saveDrop(){
   const date=document.getElementById('drop-date').value;
   if(!date){toast('⚠️ Selecciona una fecha');return;}
   const active=document.getElementById('drop-active').value==='true';
-  const row={name, date, active};
+  const row={name,date,active};
   if(editingDropId){
-    const saved=await sbUpdate('drops', editingDropId, row);
-    if(saved){ const d=drops.find(x=>x.id===editingDropId); Object.assign(d, normDrop({...row, id:editingDropId})); }
+    const saved=await sbUpdate('drops',editingDropId,row);
+    if(saved){const d=drops.find(x=>x.id===editingDropId);Object.assign(d,normDrop({...row,id:editingDropId}));}
   } else {
-    const saved=await sbInsert('drops', row);
+    const saved=await sbInsert('drops',row);
     if(saved) drops.push(normDrop(saved));
   }
   renderAll(); closeModal('drop'); toast('✅ Drop guardado');
 }
 
 async function deleteDrop(id){
-  await sbDelete('drops', id);
+  await sbDelete('drops',id);
   drops=drops.filter(d=>d.id!==id); renderAll(); toast('🗑 Drop eliminado');
 }
 
@@ -851,12 +834,32 @@ function renderRace(){
     const todayClamped=now<globalFirst?globalFirst:(now>globalLast?globalLast:now);
     const runnerPct=Math.min(100,Math.max(0,((todayClamped-globalFirst)/globalMs)*100));
 
-    // Markers: coincide con runner → borde rojo y encima del avatar; resto → borde blanco
-    const OVERLAP_THRESHOLD=3;
-    const markers=allSubs.map(s=>{
+    // Split: coinciden con runner (±3%) → encima del avatar; resto → sobre la línea
+    const OVERLAP=3;
+    const laneMarkers=[], avatarMarkers=[];
+    allSubs.forEach(s=>{
       const p=pctOf(s.date);
-      const overlaps=Math.abs(p-runnerPct)<=OVERLAP_THRESHOLD;
-      return `<div class="lane-sub-marker ${overlaps?'on-avatar':''}" style="left:${p}%;background:${s.color}" title="${esc(s.name)}: ${s.date}"></div>`;
+      (Math.abs(p-runnerPct)<=OVERLAP ? avatarMarkers : laneMarkers).push({...s,p});
+    });
+
+    // Marcadores sobre la línea — borde blanco
+    const markers=laneMarkers.map(s=>
+      `<div class="lane-sub-marker" style="left:${s.p}%;background:${s.color}" title="${esc(s.name)}: ${s.date}"></div>`
+    ).join('');
+
+    // Marcadores sobre el avatar — borde rojo, distribuidos en anillo
+    // Se renderizan como hermanos del avatar dentro de runner-wrap (mismo stacking context,
+    // sin el overflow:hidden del runner-avatar)
+    const AVATAR_PX = 42; // mismo tamaño que .runner-avatar en CSS
+    const aTotal=avatarMarkers.length;
+    const avatarDots=avatarMarkers.map((s,i)=>{
+      const angle=(2*Math.PI/Math.max(aTotal,1))*i - Math.PI/2;
+      const r=(AVATAR_PX/2)+2; // justo en el borde del círculo
+      const x=r*Math.cos(angle);
+      const y=r*Math.sin(angle);
+      return `<div class="lane-sub-marker on-avatar"
+        style="position:absolute;left:calc(50% + ${x}px);top:calc(50% + ${y}px);transform:translate(-50%,-50%);background:${s.color}"
+        title="${esc(s.name)}: ${s.date}"></div>`;
     }).join('');
 
     return `<div class="race-row">
@@ -878,6 +881,7 @@ function renderRace(){
             <div class="runner-avatar" style="border-color:${lineColor};box-shadow:0 0 16px ${lineColor}55">
               ${av}
             </div>
+            ${avatarDots}
           </div>
         </div>
       </div>
